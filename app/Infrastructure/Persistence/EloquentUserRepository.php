@@ -20,4 +20,15 @@ class EloquentUserRepository implements UserRepositoryInterface
         $model = EloquentUser::find($user->id);
         return $model && Hash::check($password, $model->password);
     }
+
+    public function create(array $data): User
+    {
+        $model = EloquentUser::create([
+            'name' => $data['name'],
+            'email' => $data['email'],
+            'password' => Hash::make($data['password']),
+        ]);
+    
+        return new User($model->id, $model->email, $model->name);
+    }
 }

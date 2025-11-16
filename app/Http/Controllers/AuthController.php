@@ -27,4 +27,30 @@ class AuthController extends Controller
             return back()->withErrors(['message' => $e->getMessage()]);
         }
     }
+
+    public function showRegister()
+    {
+        return view('register');
+    }
+
+    public function register(Request $request, AuthService $authService)
+    {
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|email',
+            'password' => 'required|min:6'
+        ]);
+
+        try {
+            $data = $authService->register(
+                $request->name,
+                $request->email,
+                $request->password
+            );
+
+            return response()->json($data);
+        } catch (\Exception $e) {
+            return back()->withErrors(['message' => $e->getMessage()]);
+        }
+    }
 }

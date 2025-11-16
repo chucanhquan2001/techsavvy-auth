@@ -8,4 +8,5 @@ interface UserRepositoryInterface
 {
     public function findByEmail(string $email): ?User;
     public function verifyPassword(User $user, string $password): bool;
+    public function create(array $data): ?User;
 }
