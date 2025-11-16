@@ -22,9 +22,11 @@ WORKDIR /var/www
 
 RUN apk add --no-cache \
     bash libpng libjpeg-turbo freetype \
-    libzip oniguruma openssl \
-    libstdc++ \
-    && cp /usr/share/zoneinfo/Asia/Ho_Chi_Minh /etc/localtime \
+    libzip oniguruma openssl libstdc++ \
+    curl pcre zlib tzdata
+
+# Set timezone
+RUN cp /usr/share/zoneinfo/Asia/Ho_Chi_Minh /etc/localtime \
     && echo "Asia/Ho_Chi_Minh" > /etc/timezone
 
 COPY --from=build /var/www /var/www
