@@ -3,54 +3,65 @@
 namespace App\Http\Controllers;
 
 use App\Application\Services\AuthService;
-use Illuminate\Http\Request;
 use Exception;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\View\View;
 
 class AuthController extends Controller
 {
-    public function showLogin()
+    public function showLogin(): View
     {
         return view('login');
     }
 
-    public function login(Request $request, AuthService $authService)
+    public function login(Request $request): RedirectResponse
     {
-        $request->validate([
-            'email' => 'required|email',
-            'password' => 'required'
+        $credentials = $request->validate([
+            'email' => ['required', 'email'],
+            'password' => ['required'],
         ]);
 
-        try {
-            $data = $authService->login($request->email, $request->password);
-            return response()->json($data);
-        } catch (Exception $e) {
-            return back()->withErrors(['message' => $e->getMessage()]);
+        if (! Auth::guard('web')->attempt($credentials, $request->boolean('remember'))) {
+            return back()->withErrors(['email' => __('auth.failed')])->onlyInput('email');
         }
+
+        $request->session()->regenerate();
+
+        return redirect()->intended('/');
     }
 
-    public function showRegister()
+    public function showRegister(): View
     {
         return view('register');
     }
 
-    public function register(Request $request, AuthService $authService)
+    public function register(Request $request, AuthService $authService): RedirectResponse
     {
-        $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'required|email',
-            'password' => 'required|min:6'
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email'],
+            'password' => ['required', 'min:6'],
         ]);
 
         try {
-            $data = $authService->register(
-                $request->name,
-                $request->email,
-                $request->password
+            $authService->register(
+                $validated['name'],
+                $validated['email'],
+                $validated['password']
             );
-
-            return response()->json($data);
-        } catch (\Exception $e) {
-            return back()->withErrors(['message' => $e->getMessage()]);
+        } catch (Exception $e) {
+            return back()->withErrors(['email' => $e->getMessage()])->withInput();
         }
+
+        Auth::guard('web')->attempt([
+            'email' => $validated['email'],
+            'password' => $validated['password'],
+        ]);
+
+        $request->session()->regenerate();
+
+        return redirect()->intended('/');
     }
 }

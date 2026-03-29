@@ -1,60 +1,125 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# TechSavvy Auth
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Dịch vụ xác thực Laravel 12 + [Laravel Passport](https://laravel.com/docs/passport): OAuth2 (password grant, refresh token), luồng **Authorization Code + PKCE** với token đặt trong **cookie HttpOnly**, và đăng nhập web (session) cho màn `/oauth/authorize`.
 
-## About Laravel
+## Yêu cầu
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+- PHP **^8.2** (extensions: `openssl`, `pdo`, `mbstring`, `tokenizer`, `xml`, `ctype`, `json`, `bcmath`…)
+- [Composer](https://getcomposer.org/)
+- Node.js + npm (nếu build frontend Vite trong repo)
+- SQLite (mặc định) hoặc MySQL/PostgreSQL
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## Cài đặt nhanh
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+### 1. Mã nguồn và dependency PHP
 
-## Learning Laravel
+```bash
+git clone <repository-url> techsavvy-auth
+cd techsavvy-auth
+composer install
+```
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+### 2. Môi trường
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+```bash
+cp .env.example .env
+php artisan key:generate
+```
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+Chỉnh `.env` cho phù hợp:
 
-## Laravel Sponsors
+- **`APP_URL`**: URL gốc của auth server (ví dụ `http://localhost:8000`).
+- **Database**: mặc định SQLite — tạo file nếu chưa có:
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+  ```bash
+  touch database/database.sqlite
+  ```
 
-### Premium Partners
+  Hoặc cấu hình `DB_*` cho MySQL/PostgreSQL.
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+- **Session**: mặc định `SESSION_DRIVER=database` — cần chạy migrate (bước 3) để có bảng `sessions`.
+- **Passport / CORS / cookie OAuth** (khi dùng PKCE + SPA): xem mục [Biến môi trường quan trọng](#biến-môi-trường-quan-trọng).
 
-## Contributing
+### 3. Database và Passport
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+```bash
+php artisan migrate
+php artisan passport:install
+```
 
-## Code of Conduct
+Lệnh `passport:install` tạo khóa mã hóa và (tùy phiên bản) các client mẫu. Giữ **client secret** của client dùng cho password grant / API nội bộ ở nơi an toàn.
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+Nếu gặp lỗi *Personal access client not found for 'users' user provider*, tạo client personal access (bắt buộc khi code gọi `User::createToken()` / `PassportTokenService`):
 
-## Security Vulnerabilities
+```bash
+php artisan passport:client --personal --name="Personal access client" --provider=users
+```
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+### 4. OAuth clients bổ sung
+
+- **Password grant** (dùng với `POST /api/v1/auth/login/password`, `register`, `refresh`): tạo client kiểu password qua Passport:
+
+  ```bash
+  php artisan passport:client --password --name="Backend or mobile"
+  ```
+
+- **Authorization Code + PKCE (SPA, public client)**:
+
+  ```bash
+  php artisan oauth:client:create "SPA" \
+    --grant=authorization_code \
+    --public \
+    --redirect=https://your-spa.example.com/auth/callback
+  ```
+
+  (Lệnh `oauth:client:create` được định nghĩa trong [`routes/console.php`](routes/console.php).)
+
+### 5. Frontend assets (tùy chọn)
+
+```bash
+npm install
+npm run build   # hoặc npm run dev khi phát triển
+```
+
+### 6. Chạy ứng dụng
+
+```bash
+php artisan serve
+```
+
+Truy cập theo `APP_URL` (ví dụ `http://127.0.0.1:8000`).
+
+## Biến môi trường quan trọng
+
+| Biến | Ý nghĩa |
+|------|--------|
+| `PASSPORT_AUTHORIZE_GUARD` | Guard session cho `/oauth/authorize` — mặc định `web`. |
+| `CORS_ALLOWED_ORIGINS` | Danh sách origin (phân tách bằng dấu phẩy) được phép gọi API kèm cookie/credentials. |
+| `CORS_SUPPORTS_CREDENTIALS` | Bật CORS credentials (cần cho SPA + `fetch(..., { credentials: 'include' })`). |
+| `OAUTH_ACCESS_TOKEN_COOKIE` / `OAUTH_REFRESH_TOKEN_COOKIE` | Tên cookie HttpOnly sau `POST /api/v1/oauth/pkce/token`. |
+| `OAUTH_TOKEN_COOKIE_SECURE` | `true` trên HTTPS production; local HTTP có thể đặt `false`. |
+| `OAUTH_TOKEN_COOKIE_SAMESITE` | `lax` (mặc định) hoặc `none` khi SPA khác site (kèm `Secure=true`). |
+
+Chi tiết thêm trong [`.env.example`](.env.example).
+
+## Kiểm thử
+
+```bash
+php artisan test
+```
+
+## Luồng API (tóm tắt)
+
+| Mục đích | Endpoint / ghi chú |
+|----------|-------------------|
+| Đăng ký / login password / refresh (JSON token) | `POST /api/v1/auth/register`, `.../login/password`, `.../refresh` |
+| PKCE: đổi `code` → token **chỉ trong cookie HttpOnly** | `POST /api/v1/oauth/pkce/token` |
+| Thông tin user (Bearer hoặc cookie access đã cấu hình middleware) | `GET /api/v1/auth/me` |
+| Đăng xuất (revoke + xóa cookie OAuth) | `POST /api/v1/auth/logout` |
+| OAuth2 chuẩn (authorize / token) | `GET /oauth/authorize`, `POST /oauth/token` (Passport) |
+| Đăng nhập web (session) cho PKCE | `GET/POST /login` trên auth server |
+
+Luồng PKCE: mở `/oauth/authorize` với `code_challenge` (S256) → user đăng nhập tại `/login` nếu chưa có session → redirect về SPA với `code` → SPA gọi `POST /api/v1/oauth/pkce/token` với `credentials: 'include'`.
 
 ## License
 
